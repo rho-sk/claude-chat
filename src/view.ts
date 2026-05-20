@@ -30,6 +30,7 @@ export class ClaudeChatView extends ItemView {
 
   // DOM
   private messagesEl!: HTMLElement;
+  private actionsEl!: HTMLElement;
   private inputEl!: HTMLTextAreaElement;
   private sendBtn!: HTMLButtonElement;
   private cancelBtn!: HTMLButtonElement;
@@ -144,6 +145,7 @@ export class ClaudeChatView extends ItemView {
 
     this.statusEl = root.createEl('div', { cls: 'cc-status' });
     this.messagesEl = root.createEl('div', { cls: 'cc-messages' });
+    this.actionsEl = root.createEl('div', { cls: 'cc-actions' });
 
     const inputArea = root.createEl('div', { cls: 'cc-input-area' });
 
@@ -194,9 +196,9 @@ export class ClaudeChatView extends ItemView {
       const o = this.modeSelect.createEl('option', { text: l });
       o.value = v;
     });
-    this.modeSelect.value = this.plugin.settings.permissionMode !== 'plan' && this.plugin.settings.permissionMode !== 'auto'
+    this.modeSelect.value = this.plugin.settings.permissionMode !== 'plan'
       ? this.plugin.settings.permissionMode
-      : 'default';
+      : 'auto';
 
     this.modelSelect = bottomBar.createEl('select', { cls: 'cc-select' });
     [
@@ -237,6 +239,20 @@ export class ClaudeChatView extends ItemView {
       attr: { title: 'Inject vault/project rules into current session now' },
     });
     this.rulesBtn.addEventListener('click', () => { void this.injectRules(); });
+
+    const fontDecBtn = bottomBar.createEl('button', {
+      cls: 'cc-font-btn',
+      text: 'A−',
+      attr: { title: 'Decrease font size' },
+    });
+    const fontIncBtn = bottomBar.createEl('button', {
+      cls: 'cc-font-btn',
+      text: 'A+',
+      attr: { title: 'Increase font size' },
+    });
+    fontDecBtn.addEventListener('click', () => this.adjustFontSize(-1));
+    fontIncBtn.addEventListener('click', () => this.adjustFontSize(+1));
+    this.applyFontSize();
 
     this.setCancelVisible(false);
     this.updateStatus();
@@ -383,8 +399,23 @@ export class ClaudeChatView extends ItemView {
 
   private streamToolBlock(block: ContentBlockToolUse) {
     this.ensureContentArea();
+    // Seal the active text segment so text after this tool block starts a new element below it
+    this.sealTextSegment();
     this.renderToolBlock(block, this.pendingContentEl!);
     this.updateStatus(`Running: ${block.name}…`);
+  }
+
+  // Store current streamText into the active pre's dataset and clear the reference,
+  // so the next text delta creates a fresh <pre> at the current DOM end position.
+  private sealTextSegment() {
+    if (!this.streamingTextEl) return;
+    if (this.streamText) {
+      this.streamingTextEl.dataset.text = this.streamText;
+    } else {
+      this.streamingTextEl.remove();
+    }
+    this.streamingTextEl = null;
+    this.streamText = '';
   }
 
   private finalizeStream() {
@@ -392,17 +423,28 @@ export class ClaudeChatView extends ItemView {
     this.streamingIndicatorEl?.remove();
     this.streamingIndicatorEl = null;
 
-    // Replace live <pre> with rendered markdown
-    if (this.streamingTextEl && this.streamText) {
-      const mdEl = this.pendingContentEl!.createEl('div', { cls: 'cc-text-block' });
-      this.streamingTextEl.replaceWith(mdEl);
-      this.streamingTextEl = null;
-      void MarkdownRenderer.render(this.app, this.streamText, mdEl, '', this);
+    // Seal any still-active text segment
+    this.sealTextSegment();
+
+    // Replace every streaming <pre> (sealed segments) with rendered markdown in place
+    if (this.pendingContentEl) {
+      for (const pre of Array.from(
+        this.pendingContentEl.querySelectorAll<HTMLElement>('pre.cc-stream-pre')
+      )) {
+        const text = pre.dataset.text ?? '';
+        if (text) {
+          const mdEl = document.createElement('div');
+          mdEl.className = 'cc-text-block';
+          pre.replaceWith(mdEl);
+          void MarkdownRenderer.render(this.app, text, mdEl, '', this);
+        } else {
+          pre.remove();
+        }
+      }
     }
 
     if (!this.pendingContentEl) {
-      this.pendingMsgEl.empty();
-      this.pendingMsgEl.createEl('div', { cls: 'cc-empty', text: '(no response)' });
+      this.pendingMsgEl.remove();
     }
 
     this.messages.push({
@@ -418,9 +460,9 @@ export class ClaudeChatView extends ItemView {
   }
 
   private handleTurnDone(success: boolean, error?: string) {
+    if (!success && error) this.showError(error);
     this.finalizeStream();
     this.setBusy(false);
-    if (!success && error) this.showError(error);
     if (success && this.lastSentInPlanMode) {
       this.showPlanApproval();
     }
@@ -430,7 +472,7 @@ export class ClaudeChatView extends ItemView {
   }
 
   private showPlanApproval() {
-    const el = this.messagesEl.createEl('div', { cls: 'cc-plan-approval' });
+    const el = this.actionsEl.createEl('div', { cls: 'cc-plan-approval' });
     el.createEl('span', { cls: 'cc-plan-approval-label', text: 'Plan ready — approve to execute or request changes:' });
 
     const actions = el.createEl('div', { cls: 'cc-plan-approval-actions' });
@@ -439,21 +481,12 @@ export class ClaudeChatView extends ItemView {
     const changesBtn = actions.createEl('button', { cls: 'cc-plan-changes', text: 'Request changes' });
 
     const resolve = (action: 'approve' | 'changes') => {
-      approveBtn.disabled = true;
-      changesBtn.disabled = true;
-      el.addClass('cc-plan-approval--resolved');
-      el.createEl('span', {
-        cls: 'cc-plan-approval-verdict',
-        text: action === 'approve' ? '✓ Approved' : '✗ Changes requested',
-      });
-
+      el.remove();
       if (action === 'approve') {
-        // Switch to default mode and send approval
         this.modeSelect.value = 'default';
         this.inputEl.value = 'Plan approved. Please proceed with execution.';
         void this.handleSend();
       } else {
-        // Focus input so user can type what to change
         this.inputEl.focus();
         this.inputEl.placeholder = 'Describe what to change in the plan…';
       }
@@ -461,14 +494,12 @@ export class ClaudeChatView extends ItemView {
 
     approveBtn.addEventListener('click', () => resolve('approve'));
     changesBtn.addEventListener('click', () => resolve('changes'));
-
-    this.scrollToBottom();
   }
 
   // ── Permission dialog ────────────────────────────────────────────────────────
 
   private showPermissionDialog(req: PermissionRequestPayload) {
-    const el = this.messagesEl.createEl('div', { cls: 'cc-permission' });
+    const el = this.actionsEl.createEl('div', { cls: 'cc-permission' });
 
     const header = el.createEl('div', { cls: 'cc-permission-header' });
     header.createEl('span', { cls: 'cc-permission-icon', text: '🔧' });
@@ -490,23 +521,21 @@ export class ClaudeChatView extends ItemView {
     const deny  = actions.createEl('button', { cls: 'cc-perm-deny',  text: 'Deny' });
 
     const respond = (behavior: 'allow' | 'deny') => {
-      el.addClass('cc-permission--resolved');
       allow.disabled = true;
       deny.disabled = true;
       el.createEl('span', { cls: 'cc-permission-verdict', text: behavior === 'allow' ? '✓ Allowed' : '✗ Denied' });
       this.plugin.bridge?.respondInteraction(req.interactionId, behavior);
+      setTimeout(() => el.remove(), 1200);
     };
 
     allow.addEventListener('click', () => respond('allow'));
     deny.addEventListener('click',  () => respond('deny'));
-
-    this.scrollToBottom();
   }
 
   // ── Question dialog (AskUserQuestion tool) ───────────────────────────────────
 
   private showQuestionDialog(req: QuestionRequestPayload) {
-    const el = this.messagesEl.createEl('div', { cls: 'cc-question' });
+    const el = this.actionsEl.createEl('div', { cls: 'cc-question' });
     el.createEl('div', { cls: 'cc-question-title', text: '❓ Claude asks:' });
 
     // selectedAnswers[qi] = Set of selected labels for question qi
@@ -558,7 +587,6 @@ export class ClaudeChatView extends ItemView {
         }
       });
 
-      el.addClass('cc-question--resolved');
       el.querySelectorAll('button').forEach((b) => (b as HTMLButtonElement).disabled = true);
 
       const summary = req.questions.map((q: QuestionDef, i: number) => {
@@ -569,12 +597,11 @@ export class ClaudeChatView extends ItemView {
       el.createEl('div', { cls: 'cc-question-summary', text: summary });
 
       this.plugin.bridge?.respondQuestion(req.interactionId, answers);
+      setTimeout(() => el.remove(), 1800);
     });
 
     // Keep a ref to suppress TS unused warning
     void questionEls;
-
-    this.scrollToBottom();
   }
 
   // ── Message rendering ────────────────────────────────────────────────────────
@@ -634,6 +661,7 @@ export class ClaudeChatView extends ItemView {
     this.streamText = '';
     this.setBusy(false);
     this.messagesEl.empty();
+    this.actionsEl.empty();
     this.updateStatus();
     this.inputEl.focus();
   }
@@ -732,6 +760,13 @@ export class ClaudeChatView extends ItemView {
     if (!msg?.role) return;
 
     const isUser = msg.role === 'user';
+
+    // Skip user turns that contain no text (e.g. tool_result-only synthetic turns)
+    if (isUser && Array.isArray(msg.content)) {
+      const hasText = (msg.content as ContentBlock[]).some(b => b.type === 'text');
+      if (!hasText) return;
+    }
+
     const el = this.messagesEl.createEl('div', {
       cls: `cc-msg ${isUser ? 'cc-msg--user' : 'cc-msg--assistant'}`,
     });
@@ -751,6 +786,11 @@ export class ClaudeChatView extends ItemView {
       }
     } else if (typeof msg.content === 'string') {
       content.appendChild(this.renderUserTextWithRules(msg.content));
+    }
+
+    // Remove container if nothing was rendered (e.g. assistant turn with unknown block types)
+    if (content.childElementCount === 0 && content.childNodes.length === 0) {
+      el.remove();
     }
   }
 
@@ -896,4 +936,19 @@ export class ClaudeChatView extends ItemView {
   }
 
   private scrollToBottom() { this.messagesEl.scrollTop = this.messagesEl.scrollHeight; }
+
+  private applyFontSize() {
+    const size = this.plugin.settings.fontSize ?? 14;
+    this.messagesEl.style.fontSize = `${size}px`;
+    this.inputEl.style.fontSize = `${size}px`;
+  }
+
+  private adjustFontSize(delta: number) {
+    const current = this.plugin.settings.fontSize ?? 14;
+    const next = Math.min(24, Math.max(10, current + delta));
+    if (next === current) return;
+    this.plugin.settings.fontSize = next;
+    void this.plugin.saveSettings();
+    this.applyFontSize();
+  }
 }

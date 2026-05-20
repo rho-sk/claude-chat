@@ -37,7 +37,7 @@ SRC_DIR="$REPO_ROOT/src"
 BRIDGE_DIR="$REPO_ROOT/bridge"
 DIST_DIR="$SCRIPT_DIR/dist"
 OUT_DIR="$DIST_DIR"
-VAULT_PATH="${OBSIDIAN_VAULT_PATH:-$HOME/work/obsidian/claude}"
+VAULT_PATH="${OBSIDIAN_VAULT_PATH:-$HOME/obsidian/claude}"
 PLUGIN_ID="claude-chat"
 
 VERSION=""

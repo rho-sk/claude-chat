@@ -188,14 +188,16 @@ export interface ClaudeChatSettings {
   nodePath: string;
   projectsFolder: string;
   rulesPath: string;
+  fontSize: number;
 }
 
 export const DEFAULT_SETTINGS: ClaudeChatSettings = {
   cwd: '',
   model: '',
   sendKey: 'ctrl+enter',
-  permissionMode: 'default',
+  permissionMode: 'auto',
   nodePath: '',
   projectsFolder: 'projects',
   rulesPath: 'x-ai-rules',
+  fontSize: 14,
 };

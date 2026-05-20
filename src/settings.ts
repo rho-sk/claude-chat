@@ -59,9 +59,11 @@ export class ClaudeChatSettingTab extends PluginSettingTab {
       .setDesc('Controls how Claude Code handles tool permissions.')
       .addDropdown((d) =>
         d
-          .addOption('default', 'Default (ask for each action)')
-          .addOption('acceptEdits', 'Accept edits automatically')
-          .addOption('bypassPermissions', 'Bypass all permissions')
+          .addOption('default', 'Default')
+          .addOption('auto', 'Auto')
+          .addOption('bypassPermissions', 'Agent')
+          .addOption('acceptEdits', 'Accept edits')
+          .addOption('plan', 'Plan')
           .setValue(this.plugin.settings.permissionMode)
           .onChange(async (v) => {
             this.plugin.settings.permissionMode = v as PermissionMode;

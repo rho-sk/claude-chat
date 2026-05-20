@@ -271,6 +271,23 @@
   color: var(--text-muted);
 }
 
+/* ── Actions area (permission / question / plan – above input) ────────────────── */
+
+.cc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 12px;
+  border-top: 2px solid var(--interactive-accent);
+  flex-shrink: 0;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.cc-actions:empty {
+  display: none;
+}
+
 /* ── Input area ───────────────────────────────────────────────────────────────── */
 
 /* Resize handle at the top of the input area */
@@ -447,6 +464,25 @@
 .cc-rules-btn:hover:not(.cc-rules-btn--active) {
   border-color: var(--color-purple);
   color: var(--color-purple);
+}
+
+.cc-font-btn {
+  background: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  padding: 0 6px;
+  height: 26px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.cc-font-btn:hover {
+  border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
 }
 
 .cc-project-select {
