@@ -1,7 +1,7 @@
 {
   "id": "claude-chat",
   "name": "Claude Code Chat",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minAppVersion": "1.0.0",
   "description": "Chat with Claude Code inside Obsidian via ACP",
   "author": "rho",
