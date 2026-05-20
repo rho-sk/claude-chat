@@ -1,0 +1,11 @@
+{
+  "name": "claude-chat-bridge",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "ACP daemon – bridges Obsidian plugin ↔ @anthropic-ai/claude-agent-sdk",
+  "main": "daemon.js",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "latest"
+  }
+}
