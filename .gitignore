@@ -2,3 +2,5 @@ node_modules/
 build/dist/
 *.js.map
 /.idea/claudeCodeTabState.xml
+/manifest.json
+/.idea/
